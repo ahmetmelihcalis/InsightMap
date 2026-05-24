@@ -4,7 +4,7 @@ InsightMap, fiziksel sahayı canlı bir dijital görünürlük katmanına dönü
 
 Platform; görüntü işleme, iş akışı yönetimi ve yapay zeka destekli karar desteğini aynı yapıda bir araya getirir.
 
-Bu proje; **Ahmet Melih Çalış, Ahmet Enes Öztürk ve Emirhan Koçoğlu** tarafından,**Kocaeli Üniversitesi Yazılım Kulübü** ve **puq.ai ana sponsorluğunda** düzenlenen **Base 41 Hackathon** kapsamında geliştirilmiş ve **ikincilik ödülü** kazanmıştır.
+Bu proje; **Ahmet Melih Çalış, Ahmet Enes Öztürk ve Emirhan Koçoğlu** tarafından, **Kocaeli Üniversitesi Yazılım Kulübü** ve **puq.ai ana sponsorluğunda** düzenlenen **Base 41 Hackathon** kapsamında geliştirilmiş ve **ikincilik ödülü** kazanmıştır.
 
 ## Proje Özeti
 
@@ -48,7 +48,7 @@ InsightMap mimarisi iki ana iş akışı etrafında kurgulanmıştır:
 
 1. Güvenlik kamerası görüntüleri sisteme base64 formatında alınır.
 2. Bu veri `puq.ai Workflow (1)` içine aktarılır.
-3. Workflow, kişi tespiti için `NovaVision API - Person Detection` katmanını kullanır.
+3. Workflow, kişi tespiti için `NovaVision - Person Detection` katmanını kullanır.
 4. Kamera pozisyonlarının senkronizasyonu sağlanır.
 5. Backend API, heatmap için gerekli detection ve yoğunluk verisini işler.
 6. Üretilen detection ve yoğunluk verisi MongoDB'ye kaydedilir.
@@ -129,11 +129,12 @@ Bu repository, InsightMap'in doğrudan uygulama katmanını içerir:
 
 ## Kurulum
 
-Kuruluma başlamadan önce aşağıdaki bileşenlerin hazır olması gerekir:
+Kuruluma başlamadan önce aşağıdaki bileşenlerin hazır ve yapılandırılmış olması gerekir:
 
 - MongoDB erişimi
 - `puq.ai` hesabı ve (Workflow yönetimi için)
 - `NovaVision` hesabı (Görüntü analizi servis erişimi için)
+- Backend’e görüntü akışı sağlayan kamera veya harici görüntü kaynağı
 
 ### 1. Bağımlılıkları yükleyin
 
