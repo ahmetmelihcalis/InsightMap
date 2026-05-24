@@ -1,0 +1,10 @@
+{
+  "imageWidth": 1920,
+  "imageHeight": 1080,
+  "confidenceThreshold": 0.4,
+  "checkIntervalMs": 30000,
+  "insightmapSaveUrl": "https://your-insightmap-host.example.com/api/snapshot/save",
+  "insightmapInfoUrl": "https://your-insightmap-host.example.com/api/snapshot/info",
+  "insightmapImageUrl": "https://your-insightmap-host.example.com/api/snapshot",
+  "aiServerUrl": "http://localhost:7001/api"
+}

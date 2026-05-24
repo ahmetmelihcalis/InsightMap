@@ -1,0 +1,535 @@
+﻿<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>InsightMap — Isı Haritası</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #132033;
+      --panel: #1a2a40;
+      --border: rgba(255,255,255,0.08);
+      --text: #e8ecf2;
+      --muted: #8a94a7;
+      --accent: #4da3ff;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: #0f172a;
+      font: 14px/1.5 "Roboto Flex", system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 12px 24px;
+      border-bottom: 1px solid rgba(255,255,255,0.10);
+      background: rgba(22, 34, 53, 0.94);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      flex-wrap: wrap;
+      box-shadow: 0 14px 34px -24px rgba(2,6,23,0.7);
+    }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      flex: 0 0 auto;
+      min-height: 48px;
+      padding: 0 12px;
+      border-radius: 16px;
+      border: 1px solid rgba(226,232,240,0.95);
+      background: linear-gradient(90deg, #ffffff 0%, #f8fcff 52%, #fff7f4 100%);
+      box-shadow: 0 10px 30px -24px rgba(15,23,42,0.35);
+    }
+    .brand img { height: 34px; width: auto; display: block; }
+    .brand small {
+      color: #64748b; font-weight: 500; margin-left: 10px;
+      font-size: 12px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-left: auto;
+      justify-content: flex-end;
+      flex: 1 1 720px;
+      min-width: min(100%, 720px);
+      padding: 4px;
+      border-radius: 999px;
+      border: 1px solid rgba(226,232,240,0.95);
+      background: rgba(248,250,252,0.8);
+    }
+    .field {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; color: #64748b;
+      padding: 0 8px;
+      white-space: nowrap;
+    }
+    .field input, .field select {
+      background: #ffffff;
+      border: 1px solid rgba(203,213,225,0.9);
+      color: #0f172a;
+      padding: 6px 9px;
+      border-radius: 7px;
+      font: inherit;
+      font-size: 12px;
+      outline: none;
+      min-width: 90px;
+    }
+    .field input:focus, .field select:focus { border-color: var(--accent); }
+    .field input[type=range] { padding: 0; min-width: 110px; }
+    @media (max-width: 1120px) {
+      .topbar {
+        justify-content: flex-start;
+      }
+      .controls {
+        flex: 1 1 100%;
+        min-width: 100%;
+        justify-content: flex-start;
+        border-radius: 20px;
+      }
+    }
+    @media (max-width: 720px) {
+      .topbar {
+        padding: 12px 14px;
+      }
+      .brand {
+        min-height: 44px;
+        padding: 0 10px;
+      }
+      .brand img {
+        height: 30px;
+      }
+      .controls {
+        gap: 6px;
+        padding: 6px;
+      }
+      .field {
+        width: 100%;
+        justify-content: space-between;
+        padding: 2px 6px;
+      }
+      .field input[type=range] {
+        min-width: 0;
+        width: 120px;
+      }
+      button.btn {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+
+    button.btn {
+      background: #ffffff;
+      border: 1px solid rgba(203,213,225,0.9);
+      color: #0f172a;
+      padding: 6px 11px;
+      font: inherit; font-size: 12px;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: background 120ms;
+    }
+    button.btn:hover { background: #f8fafc; }
+    button.btn.primary {
+      background: #0b1728; color: #fff; border-color: #0b1728;
+    }
+    button.btn.primary:hover { background: #18273d; }
+
+    main {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .stage {
+      position: relative;
+      max-width: 1280px;
+      width: 100%;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid rgba(203,213,225,0.9);
+      background: var(--panel);
+      box-shadow: 0 30px 60px -30px rgba(0,0,0,0.6);
+    }
+    .stage img,
+    .stage canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    .stage canvas.overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      mix-blend-mode: normal;
+    }
+    .stage.empty::after {
+      content: 'Henüz görsel yok | veri akışı bekleniyor.';
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 14px;
+      background: var(--panel);
+    }
+
+    .legend {
+      position: absolute;
+      bottom: 14px;
+      left: 14px;
+      padding: 8px 12px;
+      background: rgba(10,14,26,0.72);
+      border: 1px solid rgba(203,213,225,0.9);
+      border-radius: 9px;
+      backdrop-filter: blur(8px);
+      display: flex; align-items: center; gap: 10px;
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .legend .bar {
+      width: 140px; height: 8px; border-radius: 999px;
+      background: linear-gradient(to right,
+        rgba(30, 90, 220, 0.85) 0%,
+        rgba(0, 200, 200, 0.85) 25%,
+        rgba(255, 215, 0, 0.85) 60%,
+        rgba(255, 70, 60, 0.95) 100%);
+    }
+
+    .statusbar {
+      display: flex;
+      gap: 16px;
+      padding: 10px 22px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--muted);
+      font-family: "Roboto Mono", ui-monospace, monospace;
+      flex-wrap: wrap;
+    }
+    .statusbar b { color: var(--text); font-weight: 500; }
+    .statusbar .live {
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .statusbar .live::before {
+      content: ''; width: 6px; height: 6px; border-radius: 999px;
+      background: #34d399;
+      box-shadow: 0 0 0 3px rgba(52,211,153,0.18);
+      animation: pulse 1.4s infinite;
+    }
+    @keyframes pulse {
+      0%,100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.55; transform: scale(0.85); }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="topbar">
+    <span class="brand">
+      <img src="/logo.png" alt="InsightMap" />
+      <small>Isı Haritası</small>
+    </span>
+
+    <div class="controls">
+      <label class="field">
+        Pencere
+        <select id="windowSelect">
+          <option value="1h">Son 1 saat</option>
+          <option value="24h" selected>Son 24 saat</option>
+          <option value="3d">Son 3 gün</option>
+          <option value="7d">Son 7 gün</option>
+          <option value="14d">Son 14 gün</option>
+          <option value="21d">Son 21 gün</option>
+          <option value="30d">Son 30 gün</option>
+          <option value="1y">Son 1 yıl</option>
+        </select>
+      </label>
+      <label class="field">
+        Yoğunluk
+        <input id="alphaRange" type="range" min="0" max="100" value="55" />
+      </label>
+      <label class="field">
+        Yarıçap
+        <input id="radiusRange" type="range" min="20" max="220" value="90" />
+      </label>
+      <button id="refreshBtn" class="btn primary">Yenile</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="stage" id="stage">
+      <img id="snapshot" alt="snapshot" />
+      <canvas class="overlay" id="overlay"></canvas>
+
+      <div class="legend">
+        <span>Soğuk</span>
+        <span class="bar"></span>
+        <span>Sıcak</span>
+      </div>
+    </div>
+  </main>
+
+  <footer class="statusbar">
+    <span class="live">canlı</span>
+    <span id="snapInfo">snapshot: -</span>
+    <span id="countInfo">tespit: -</span>
+    <span id="updateInfo" style="margin-left:auto">-</span>
+  </footer>
+
+  <script>
+    const SNAPSHOT_URL     = '/api/snapshot';
+    const SNAPSHOT_INFO    = '/api/snapshot/info';
+    const DETECTIONS_URL   = '/api/detections/recent';
+    const POLL_INTERVAL_MS = 10000;
+
+    const els = {
+      stage:        document.getElementById('stage'),
+      img:          document.getElementById('snapshot'),
+      canvas:       document.getElementById('overlay'),
+      window:       document.getElementById('windowSelect'),
+      alpha:        document.getElementById('alphaRange'),
+      radius:       document.getElementById('radiusRange'),
+      refresh:      document.getElementById('refreshBtn'),
+      snapInfo:     document.getElementById('snapInfo'),
+      countInfo:    document.getElementById('countInfo'),
+      updateInfo:   document.getElementById('updateInfo'),
+    };
+
+    let lastSnapshotTs = null;
+    let lastImageBlobUrl = null;
+    let cachedDetections = null;
+
+    // Performans sınırları
+    const MAX_BOXES_TO_RENDER = 3000;  // Bu eşik aşıldığında örnekleme uygulanır.
+    const SLIDER_DEBOUNCE_MS  = 80;
+
+    // Yarıçapa göre üretilen gradient sprite önbelleklenir.
+    const spriteCache = new Map();
+    function getGradientSprite(r) {
+      if (spriteCache.has(r)) return spriteCache.get(r);
+      const off = document.createElement('canvas');
+      off.width = off.height = r * 2;
+      const ctx = off.getContext('2d');
+      const grad = ctx.createRadialGradient(r, r, 0, r, r, r);
+      grad.addColorStop(0,    'rgba(0,0,0,0.30)');
+      grad.addColorStop(0.5,  'rgba(0,0,0,0.12)');
+      grad.addColorStop(1,    'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, r * 2, r * 2);
+      spriteCache.set(r, off);
+      return off;
+    }
+
+    // 256 adımlı renk skalası. Yoğunluk değerleri RGB karşılıklarına çevrilir.
+    // Alt eşik tamamen şeffaf bırakılmaz; böylece boş alanlarda da zemin etkisi korunur.
+    const GRADIENT_STOPS = [
+      [0.00, [40, 110, 240, 80]],
+      [0.20, [40, 110, 240, 220]],
+      [0.40, [0, 200, 200, 240]],
+      [0.65, [255, 215, 0, 250]],
+      [0.85, [255, 110, 40, 250]],
+      [1.00, [255, 50, 50, 255]],
+    ];
+    const palette = (() => {
+      const p = new Uint8ClampedArray(256 * 4);
+      for (let i = 0; i < 256; i++) {
+        const t = i / 255;
+        let a = GRADIENT_STOPS[0], b = GRADIENT_STOPS[GRADIENT_STOPS.length - 1];
+        for (let j = 0; j < GRADIENT_STOPS.length - 1; j++) {
+          if (t >= GRADIENT_STOPS[j][0] && t <= GRADIENT_STOPS[j+1][0]) {
+            a = GRADIENT_STOPS[j];
+            b = GRADIENT_STOPS[j+1];
+            break;
+          }
+        }
+        const span = b[0] - a[0] || 1;
+        const u = (t - a[0]) / span;
+        for (let k = 0; k < 4; k++) {
+          p[i*4 + k] = Math.round(a[1][k] + (b[1][k] - a[1][k]) * u);
+        }
+      }
+      return p;
+    })();
+
+    // API yardımcıları
+    async function fetchJson(url) {
+      const r = await fetch(url, { cache: 'no-store' });
+      if (!r.ok && r.status !== 204) throw new Error(`HTTP ${r.status}`);
+      if (r.status === 204) return null;
+      return r.json();
+    }
+
+    async function fetchSnapshotBlob() {
+      const r = await fetch(SNAPSHOT_URL + '?t=' + Date.now(), { cache: 'no-store' });
+      if (r.status === 204) return null;
+      if (!r.ok) throw new Error(`snapshot HTTP ${r.status}`);
+      return r.blob();
+    }
+
+    function paramsForDetections() {
+      const p = new URLSearchParams();
+      p.set('window', els.window.value);
+      p.set('limit', '5000');
+      return p.toString();
+    }
+
+    // Isı haritası çizimi
+    function renderHeatmap(detections, imageW, imageH) {
+      const canvas = els.canvas;
+      canvas.width  = imageW;
+      canvas.height = imageH;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+      // 1. Tuvali temizle.
+      ctx.clearRect(0, 0, imageW, imageH);
+      if (!detections || detections.length === 0) return 0;
+
+      const radius   = parseInt(els.radius.value, 10) || 90;
+      const alphaMax = (parseInt(els.alpha.value, 10) || 55) / 100;
+
+      // 2a. Soğuk temel katmanı çiz.
+      // 1 frame yaklaşık 20, 100 frame yaklaşık 25, 400+ frame ise en fazla 40 alpha kullanır.
+      const baselineAlpha = Math.min(40, 20 + detections.length * 0.05);
+      ctx.fillStyle = `rgba(0,0,0,${baselineAlpha / 255})`;
+      ctx.fillRect(0, 0, imageW, imageH);
+
+      // 2b. Tüm bounding box merkezlerini topla.
+      const points = [];
+      for (const doc of detections) {
+        const scaleX = doc.imageSize && doc.imageSize.width  ? imageW / doc.imageSize.width  : 1;
+        const scaleY = doc.imageSize && doc.imageSize.height ? imageH / doc.imageSize.height : 1;
+        for (const box of (doc.boundingBoxes || [])) {
+          points.push({
+            cx: (box.x + box.width  / 2) * scaleX,
+            cy: (box.y + box.height / 2) * scaleY,
+          });
+        }
+      }
+      const totalBoxes = points.length;
+
+      // 3000 üstünde örnekleme uygulanır; görsel fark küçük, performans kazanımı anlamlıdır.
+      let pointsToDraw = points;
+      if (totalBoxes > MAX_BOXES_TO_RENDER) {
+        const step = totalBoxes / MAX_BOXES_TO_RENDER;
+        pointsToDraw = [];
+        for (let i = 0; i < MAX_BOXES_TO_RENDER; i++) {
+          pointsToDraw.push(points[Math.floor(i * step)]);
+        }
+      }
+
+      // 2c. Noktaları sprite kullanarak additive modda çiz.
+      const sprite = getGradientSprite(radius);
+      ctx.globalCompositeOperation = 'lighter';
+      for (const p of pointsToDraw) {
+        ctx.drawImage(sprite, p.cx - radius, p.cy - radius);
+      }
+      ctx.globalCompositeOperation = 'source-over';
+
+      const boxCount = totalBoxes;
+
+      // 3. Alpha kanalına göre renklendir.
+      const img  = ctx.getImageData(0, 0, imageW, imageH);
+      const data = img.data;
+      for (let i = 0; i < data.length; i += 4) {
+        const a = data[i + 3];
+        if (a === 0) continue;
+        const idx = a * 4;
+        data[i + 0] = palette[idx + 0];
+        data[i + 1] = palette[idx + 1];
+        data[i + 2] = palette[idx + 2];
+        data[i + 3] = Math.round(palette[idx + 3] * alphaMax);
+      }
+      ctx.putImageData(img, 0, 0);
+
+      return boxCount;
+    }
+
+    function renderWith(detections) {
+      cachedDetections = detections;
+      if (!els.img.complete || !els.img.naturalWidth) return 0;
+      return renderHeatmap(detections, els.img.naturalWidth, els.img.naturalHeight);
+    }
+
+    // Ana yenileme akışı
+    async function refresh(force = false) {
+      try {
+        const info = await fetchJson(SNAPSHOT_INFO);
+        if (!info || !info.hasSnapshot) {
+          els.stage.classList.add('empty');
+          els.snapInfo.textContent = 'snapshot: yok';
+          return;
+        }
+        els.stage.classList.remove('empty');
+
+        const snapshotChanged = info.receivedAt !== lastSnapshotTs;
+        if (snapshotChanged || force) {
+          const blob = await fetchSnapshotBlob();
+          if (blob) {
+            if (lastImageBlobUrl) URL.revokeObjectURL(lastImageBlobUrl);
+            lastImageBlobUrl = URL.createObjectURL(blob);
+            await new Promise((resolve, reject) => {
+              els.img.onload = resolve;
+              els.img.onerror = reject;
+              els.img.src = lastImageBlobUrl;
+            });
+            lastSnapshotTs = info.receivedAt;
+            els.snapInfo.textContent = `snapshot: ${new Date(info.receivedAt).toLocaleTimeString()} · ${info.mime} · ${(info.sizeBytes/1024).toFixed(1)}KB`;
+          }
+        }
+
+        const detRes = await fetchJson(`${DETECTIONS_URL}?${paramsForDetections()}`);
+        const detections = detRes && detRes.detections ? detRes.detections : [];
+        const boxCount = renderWith(detections);
+
+        const sampled = boxCount > MAX_BOXES_TO_RENDER ? ` · ${MAX_BOXES_TO_RENDER} sample` : '';
+        els.countInfo.textContent = `tespit: ${detections.length} frame · ${boxCount} kişi${sampled}`;
+        els.updateInfo.textContent = `güncelleme: ${new Date().toLocaleTimeString()}`;
+      } catch (err) {
+        els.updateInfo.textContent = `hata: ${err.message}`;
+      }
+    }
+
+    // Kontroller değiştiğinde veriyi tekrar çekmeden önbellekten yeniden çiz.
+    // Slider hızlı hareket ederken her değişimde değil, kısa aralıklarla çizim yap.
+    let sliderTimer = null;
+    function debouncedRender() {
+      if (sliderTimer) return;
+      sliderTimer = setTimeout(() => {
+        sliderTimer = null;
+        if (cachedDetections) renderWith(cachedDetections);
+      }, SLIDER_DEBOUNCE_MS);
+    }
+    ['alpha', 'radius'].forEach((k) => {
+      els[k].addEventListener('input', debouncedRender);
+    });
+    els.window.addEventListener('change', () => refresh(true));
+    els.refresh.addEventListener('click', () => refresh(true));
+
+    // Görsel boyutu değişirse ısı haritasını yeniden çiz.
+    new ResizeObserver(() => {
+      if (cachedDetections) renderWith(cachedDetections);
+    }).observe(els.img);
+
+    refresh(true);
+    setInterval(refresh, POLL_INTERVAL_MS);
+  </script>
+</body>
+</html>
+

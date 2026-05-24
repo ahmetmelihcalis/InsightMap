@@ -1,0 +1,740 @@
+﻿<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kadıköy Merkez — InsightMap</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:wght@400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: {
+        colors: {
+          ink:   { 950:'#0b1421', 900:'#132033', 850:'#1a2a40', 800:'#22344d' },
+          atlas: { 400:'#6db4ff', 500:'#4da3ff' },
+          halo:  { 400:'#b399ff', 500:'#9b7cff' },
+        },
+        fontFamily: { sans:['"Roboto Flex"','system-ui','sans-serif'], mono:['"Roboto Mono"','ui-monospace','monospace'] },
+      }}
+    };
+  </script>
+  <style>
+    .dot-grid {
+      background-image: radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px);
+      background-size: 26px 26px;
+    }
+    .text-gradient {
+      background: linear-gradient(135deg, #6db4ff 0%, #b399ff 60%, #9b7cff 100%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    /* Yükleme göstergesi */
+    .spinner {
+      width: 32px; height: 32px;
+      border: 2.5px solid rgba(255,255,255,0.10);
+      border-top-color: rgba(109,180,255,0.95);
+      border-radius: 999px;
+      animation: spin 0.8s linear infinite;
+    }
+    .spinner.sm { width: 18px; height: 18px; border-width: 2px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Görsel yüklendiğinde yumuşak geçiş uygula */
+    .view-img {
+      opacity: 0;
+      transition: opacity 220ms ease-out;
+    }
+    .view-img.loaded { opacity: 1; }
+
+    /* Seçili thumbnail vurgusu */
+    .thumb {
+      transition: border-color 160ms, transform 160ms, box-shadow 160ms;
+    }
+    .thumb:hover { transform: translateY(-1px); }
+    .thumb.active {
+      border-color: rgba(109,180,255,0.65);
+      box-shadow: 0 0 0 1px rgba(109,180,255,0.4), 0 8px 26px -10px rgba(77,163,255,0.5);
+    }
+
+    /* Ana görünüm oranları: kameralar için yatay, ısı haritası için daha dikey */
+    #mainView { aspect-ratio: 16 / 10; }
+    #mainView.heatmap-mode { aspect-ratio: 3 / 4; }
+    @media (min-width: 1024px) {
+      #mainView.heatmap-mode { aspect-ratio: 4 / 5; }
+    }
+
+    /* Öneri kartı giriş animasyonu */
+    @keyframes suggestionIn {
+      0%   { opacity: 0; transform: translateY(-8px) scale(0.985); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    #puqSuggestion.show {
+      display: block;
+      animation: suggestionIn 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+
+    /* Kutlama parçacıkları */
+    .confetti-piece {
+      position: absolute;
+      top: -12px;
+      width: 8px;
+      height: 14px;
+      border-radius: 2px;
+      opacity: 0;
+      will-change: transform, opacity;
+      animation: confettiFall var(--dur,2200ms) cubic-bezier(0.18,0.7,0.3,1) var(--delay,0ms) forwards;
+    }
+    @keyframes confettiFall {
+      0%   { opacity: 0; transform: translate3d(0,-20px,0) rotate(0deg); }
+      10%  { opacity: 1; }
+      100% { opacity: 0; transform: translate3d(var(--dx,0),140px,0) rotate(var(--rot,540deg)); }
+    }
+  </style>
+</head>
+<body class="bg-ink-900 text-slate-200 font-sans antialiased min-h-screen flex flex-col">
+
+  <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+    <div class="absolute -top-40 left-1/2 h-[640px] w-[1100px] -translate-x-1/2 rounded-full bg-atlas-500/10 blur-[140px]"></div>
+    <div class="absolute bottom-0 -right-40 h-[520px] w-[520px] rounded-full bg-halo-500/12 blur-[120px]"></div>
+  </div>
+  <div class="dot-grid fixed inset-0 -z-10 [mask-image:radial-gradient(ellipse_at_top,black,transparent_75%)]"></div>
+
+  <!-- Kimlik doğrulama bekleme ekranı -->
+  <div id="gate" class="fixed inset-0 z-50 grid place-items-center bg-ink-900/95">
+    <div class="text-xs font-mono uppercase tracking-[0.2em] text-slate-500">yükleniyor...</div>
+  </div>
+
+  <header class="sticky top-0 z-50 border-b border-white/10 bg-[#162235]/94 backdrop-blur shadow-[0_14px_34px_-24px_rgba(2,6,23,0.7)]">
+    <nav class="mx-auto flex max-w-7xl items-center justify-between px-6 py-3.5">
+      <div class="flex items-center gap-3">
+        <a href="/stores.html" class="group flex items-center gap-3">
+          <span class="flex h-12 items-center rounded-2xl border border-slate-200 bg-gradient-to-r from-white via-[#f8fcff] to-[#fff7f4] px-3 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)] transition group-hover:border-slate-300">
+            <img src="/logo.png" alt="InsightMap" class="h-9 w-auto" />
+          </span>
+        </a>
+        <div class="hidden items-center gap-2 rounded-full border border-slate-200 bg-slate-50/80 px-4 py-2 text-sm text-slate-600 sm:flex">
+          <a href="/stores.html" class="transition hover:text-ink-900">Alanlar</a>
+          <span class="text-slate-300">/</span>
+          <span class="text-ink-900">Kadıköy Merkez</span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <span id="userName" class="hidden text-sm text-ink-900 sm:inline">—</span>
+        <button id="logoutBtn" class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-700 transition hover:border-slate-300 hover:bg-slate-50">Çıkış</button>
+      </div>
+    </nav>
+  </header>
+  <main class="mx-auto w-full max-w-7xl flex-1 px-6 py-10">
+
+    <!-- Üst bilgi alanı -->
+    <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <p class="font-mono text-[11px] uppercase tracking-[0.18em] text-atlas-400">Saha · Demo</p>
+        <h1 class="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Kadıköy Merkez</h1>
+        <p class="mt-2 text-sm text-slate-400">Caferağa Mah. · 4 Kamera + Isı Haritası</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <button
+          id="puqSyncBtn"
+          class="group inline-flex items-center gap-2 rounded-lg border border-atlas-400/30 bg-atlas-500/10 px-3.5 py-2 text-xs font-medium text-atlas-400 transition hover:border-atlas-400/50 hover:bg-atlas-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <svg id="puqSyncIcon" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 1 1-3.5-7.1"/><path d="M21 3v6h-6"/>
+          </svg>
+          <span id="puqSyncLabel">Yapay Zekadan Detaylı Açıklama Al</span>
+        </button>
+        <div class="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-slate-400">
+          <span id="liveDot" class="inline-flex h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400"></span>
+          <span id="liveStatus">Canlı</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hata veya bilgi toast alanı -->
+    <div id="puqToast" class="mb-6 hidden rounded-xl border px-4 py-3 text-sm"></div>
+
+    <!-- Başarılı Puq.ai öneri kartı -->
+    <div id="puqSuggestion" class="relative mb-6 hidden overflow-hidden rounded-2xl border border-emerald-400/30 bg-gradient-to-br from-emerald-500/[0.08] via-emerald-500/[0.04] to-ink-900/40 p-5 shadow-[0_30px_80px_-30px_rgba(16,185,129,0.45)]">
+      <!-- Arka plan parıltısı -->
+      <div class="pointer-events-none absolute inset-0 -z-0">
+        <div class="absolute -top-16 left-1/3 h-40 w-40 rounded-full bg-emerald-400/15 blur-3xl"></div>
+        <div class="absolute bottom-0 right-0 h-32 w-32 rounded-full bg-teal-400/10 blur-3xl"></div>
+      </div>
+      <!-- Konfeti katmanı -->
+      <div id="puqConfetti" class="pointer-events-none absolute inset-0 -z-0 overflow-hidden"></div>
+
+      <div class="relative flex items-start gap-4">
+        <span class="grid h-12 w-12 shrink-0 place-items-center rounded-xl border border-emerald-400/30 bg-emerald-400/10 text-2xl">✦</span>
+        <div class="min-w-0 flex-1">
+          <div class="flex flex-wrap items-center gap-2">
+            <p class="font-mono text-[11px] uppercase tracking-[0.18em] text-emerald-300">Puq.ai · Optimizasyon Önerisi</p>
+            <span id="puqSuggestionMeta" class="rounded-md border border-emerald-400/20 bg-emerald-400/5 px-1.5 py-0.5 font-mono text-[10px] text-emerald-200">—</span>
+          </div>
+          <h3 class="mt-1.5 text-lg font-semibold tracking-tight text-white">Yeni İçgörü Hazır</h3>
+          <div id="puqSuggestionBody" class="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-200"></div>
+          <div class="mt-4 flex flex-wrap items-center gap-2">
+            <button id="puqDismissBtn" class="rounded-md border border-white/10 px-2.5 py-1 text-xs text-slate-300 transition hover:border-white/20 hover:bg-white/[0.04]">Kapat</button>
+            <button id="puqResyncBtn" class="rounded-md border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-200 transition hover:bg-emerald-500/15">Tekrar Gönder</button>
+            <span id="puqSuggestionTime" class="ml-auto font-mono text-[10px] uppercase tracking-wider text-slate-500">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Galeri düzeni: büyük ekranda ana görünüm ve thumbnail'ler, mobilde alt alta -->
+    <div class="grid gap-5 lg:grid-cols-[1fr_220px]">
+
+      <!-- Ana görünüm -->
+      <div class="order-2 lg:order-1">
+        <div id="mainView" class="relative overflow-hidden rounded-2xl border border-white/10 bg-ink-850 shadow-[0_30px_60px_-30px_rgba(0,0,0,0.6)]">
+          <!-- Görsel yokken gösterilen yükleme alanı -->
+          <div id="mainLoader" class="absolute inset-0 grid place-items-center">
+            <div class="flex flex-col items-center gap-3 text-slate-400">
+              <div class="spinner"></div>
+              <p class="text-sm">Görüntü Yükleniyor...</p>
+              <p class="font-mono text-[10px] uppercase tracking-wider text-slate-600">Snapshot Bekleniyor</p>
+            </div>
+          </div>
+          <!-- Kamera görüntüsü -->
+          <img id="mainImg" class="view-img absolute inset-0 h-full w-full object-cover" alt="" />
+          <!-- Isı haritası iframe'i -->
+          <iframe id="heatmapFrame" class="absolute inset-0 h-full w-full border-0" style="display:none" src="about:blank"></iframe>
+
+          <!-- Üst bilgi rozetleri -->
+          <div id="mainLabelBadge" class="pointer-events-none absolute left-4 top-4 inline-flex items-center gap-2 rounded-md bg-ink-900/70 px-2.5 py-1 backdrop-blur">
+            <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400"></span>
+            <span id="mainLabel" class="font-mono text-[10px] uppercase tracking-wider text-white">—</span>
+          </div>
+          <div id="mainTimestampBadge" class="pointer-events-none absolute right-4 top-4 inline-flex items-center gap-2 rounded-md bg-ink-900/70 px-2.5 py-1 backdrop-blur">
+            <span id="mainTimestamp" class="font-mono text-[10px] uppercase tracking-wider text-slate-400">—</span>
+          </div>
+        </div>
+
+        <!-- Mobil thumbnail listesi -->
+        <div id="thumbsMobile" class="mt-4 grid grid-cols-5 gap-2 lg:hidden"></div>
+      </div>
+
+      <!-- Masaüstü thumbnail listesi -->
+      <aside class="order-1 hidden flex-col gap-3 lg:order-2 lg:flex">
+        <p class="font-mono text-[10px] uppercase tracking-wider text-slate-500">Görünümler</p>
+        <div id="thumbsDesktop" class="flex flex-col gap-3"></div>
+      </aside>
+    </div>
+
+    <!-- Alt bilgi kartları -->
+    <div class="mt-8 grid gap-4 sm:grid-cols-3">
+      <div class="rounded-xl border border-white/5 bg-ink-850/60 p-5">
+        <p class="font-mono text-[10px] uppercase tracking-wider text-slate-500">Aktif Görünüm</p>
+        <p id="statSelected" class="mt-2 text-2xl font-semibold text-white">—</p>
+        <p class="mt-1 text-xs text-slate-500">Unity Client Bu Görünümü Yüksek Kalitede Yükler</p>
+      </div>
+      <div class="rounded-xl border border-white/5 bg-ink-850/60 p-5">
+        <p class="font-mono text-[10px] uppercase tracking-wider text-slate-500">Dolu slot</p>
+        <p id="statFilled" class="mt-2 text-2xl font-semibold text-white">0 / 5</p>
+        <p class="mt-1 text-xs text-slate-500">Görüntü Gelen View Sayısı</p>
+      </div>
+      <div class="rounded-xl border border-white/5 bg-ink-850/60 p-5">
+        <p class="font-mono text-[10px] uppercase tracking-wider text-slate-500">Son Güncelleme</p>
+        <p id="statUpdated" class="mt-2 text-2xl font-semibold text-white">—</p>
+        <p class="mt-1 text-xs text-slate-500">Polling 3 Sn Aralıkla</p>
+      </div>
+    </div>
+  </main>
+
+  <footer class="border-t border-white/5">
+    <div class="mx-auto flex max-w-7xl items-center justify-between gap-2 px-6 py-5 text-xs text-slate-500">
+      <p>© 2026 InsightMap</p>
+      <p class="font-mono uppercase tracking-wider">Saha · Demo</p>
+    </div>
+  </footer>
+
+  <script>
+    // Görünüm tanımları:
+    // - viewId 0, ısı haritasıdır ve /heatmap.html iframe'i içinde açılır.
+    // - viewId 1..4, kamera görünümleridir ve /api/snapshot/N üzerinden okunur.
+    const VIEWS = [
+      { id: 0, label: 'Isı Haritası', type: 'heatmap' },
+      { id: 1, label: 'Kamera 1',     type: 'camera'  },
+      { id: 2, label: 'Kamera 2',     type: 'camera'  },
+      { id: 3, label: 'Kamera 3',     type: 'camera'  },
+      { id: 4, label: 'Kamera 4',     type: 'camera'  },
+    ];
+    const POLL_MS = 3000;
+
+    const els = {
+      gate:          document.getElementById('gate'),
+      userName:      document.getElementById('userName'),
+      logoutBtn:     document.getElementById('logoutBtn'),
+      mainView:      document.getElementById('mainView'),
+      mainImg:       document.getElementById('mainImg'),
+      mainLoader:    document.getElementById('mainLoader'),
+      mainLabel:     document.getElementById('mainLabel'),
+      mainLabelBadge: document.getElementById('mainLabelBadge'),
+      mainTimestamp: document.getElementById('mainTimestamp'),
+      mainTimestampBadge: document.getElementById('mainTimestampBadge'),
+      heatmapFrame:  document.getElementById('heatmapFrame'),
+      thumbsDesktop: document.getElementById('thumbsDesktop'),
+      thumbsMobile:  document.getElementById('thumbsMobile'),
+      statSelected:  document.getElementById('statSelected'),
+      statFilled:    document.getElementById('statFilled'),
+      statUpdated:   document.getElementById('statUpdated'),
+      liveDot:       document.getElementById('liveDot'),
+      liveStatus:    document.getElementById('liveStatus'),
+      puqSyncBtn:    document.getElementById('puqSyncBtn'),
+      puqSyncIcon:   document.getElementById('puqSyncIcon'),
+      puqSyncLabel:  document.getElementById('puqSyncLabel'),
+      puqToast:      document.getElementById('puqToast'),
+      puqSuggestion:     document.getElementById('puqSuggestion'),
+      puqSuggestionMeta: document.getElementById('puqSuggestionMeta'),
+      puqSuggestionBody: document.getElementById('puqSuggestionBody'),
+      puqSuggestionTime: document.getElementById('puqSuggestionTime'),
+      puqConfetti:       document.getElementById('puqConfetti'),
+      puqDismissBtn:     document.getElementById('puqDismissBtn'),
+      puqResyncBtn:      document.getElementById('puqResyncBtn'),
+    };
+
+    let selectedViewId = null;
+    let viewsState = []; // [{ viewId, hasSnapshot, receivedAt }]
+
+    // Oturum kontrolü
+    (async () => {
+      try {
+        const r = await fetch('/api/auth/me', { credentials: 'same-origin' });
+        if (!r.ok) throw new Error('unauthorized');
+        const d = await r.json();
+        if (!d.ok || !d.user) throw new Error('unauthorized');
+        els.userName.textContent = d.user.name || d.user.email;
+        els.userName.classList.remove('hidden');
+        els.gate.remove();
+        boot();
+      } catch (_) {
+        location.replace('/login.html');
+      }
+    })();
+
+    els.logoutBtn.addEventListener('click', async () => {
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+      location.href = '/login.html';
+    });
+
+    // Puq.ai senkronizasyonu
+    function showPuqToast(kind, msg) {
+      const toast = els.puqToast;
+      toast.className = 'mb-6 rounded-xl border px-4 py-3 text-sm';
+      if (kind === 'ok') {
+        toast.classList.add('border-emerald-400/30', 'bg-emerald-500/10', 'text-emerald-200');
+      } else if (kind === 'err') {
+        toast.classList.add('border-rose-400/30', 'bg-rose-500/10', 'text-rose-200');
+      } else {
+        toast.classList.add('border-white/10', 'bg-white/[0.04]', 'text-slate-300');
+      }
+      toast.textContent = msg;
+      toast.classList.remove('hidden');
+      clearTimeout(showPuqToast._t);
+      showPuqToast._t = setTimeout(() => toast.classList.add('hidden'), 6000);
+    }
+
+    // Puq.ai yanıtının içinden okunabilir bir özet metin çıkarır.
+    // Yanıt bazen iç içe JSON olarak gelebilir, bu nedenle string katmanları özyineli olarak açar.
+    function extractSuggestionText(forwardedBody) {
+      if (forwardedBody == null) return null;
+      const trimmed = String(forwardedBody).trim();
+      if (!trimmed) return null;
+
+      const CANDIDATES = [
+        // Alanları önce en spesifik olandan başlayarak dene.
+        'content', 'aiReport', 'report', 'analysis', 'insight',
+        'suggestion', 'recommendation', 'output', 'answer',
+        'message', 'text', 'result', 'response', 'reply', 'data',
+      ];
+
+      function digString(val, depth) {
+        if (val == null || depth > 6) return null;
+        if (typeof val === 'string') {
+          const s = val.trim();
+          if (!s) return null;
+          // JSON gibi görünüyorsa bir katman daha aç.
+          if ((s.startsWith('{') && s.endsWith('}')) ||
+              (s.startsWith('[') && s.endsWith(']'))) {
+            try {
+              const parsed = JSON.parse(s);
+              const deeper = digString(parsed, depth + 1);
+              if (deeper) return deeper;
+            } catch (_) { /* JSON değilse ham değeri kullan. */ }
+          }
+          return s;
+        }
+        if (Array.isArray(val)) {
+          for (const item of val) {
+            const r = digString(item, depth + 1);
+            if (r) return r;
+          }
+          return null;
+        }
+        if (typeof val === 'object') {
+          // 1. Muhtemel alan adlarını tara.
+          for (const k of CANDIDATES) {
+            if (val[k] !== undefined && val[k] !== null) {
+              const r = digString(val[k], depth + 1);
+              if (r) return r;
+            }
+          }
+          // 2. Son çare olarak en uzun string alanını seç.
+          let best = null;
+          for (const k of Object.keys(val)) {
+            const v = val[k];
+            if (typeof v === 'string' && v.trim() && v.trim() !== 'null') {
+              if (!best || v.length > best.length) best = v.trim();
+            } else if (typeof v === 'object') {
+              const r = digString(v, depth + 1);
+              if (r && (!best || r.length > best.length)) best = r;
+            }
+          }
+          return best;
+        }
+        return null;
+      }
+
+      // 1. Önce doğrudan JSON parse etmeyi dene.
+      try {
+        const parsed = JSON.parse(trimmed);
+        const text = digString(parsed, 0);
+        if (text) return text;
+        // Parse başarılı olsa bile uygun alan bulunamazsa ham metni taramaya geç.
+          } catch (_) { /* JSON değilse veya bozuksa aşağıdaki regex yoluna geç. */ }
+
+      // 2. Bozuk JSON fallback'i: "content":"..." veya "aiReport":"..."
+      // Bazı yanıtlarda escape sorunu olduğu için ilgili anahtarlardan sonraki ilk string değeri çıkar.
+      const KEYS_RX = ['content', 'aiReport', 'report', 'analysis', 'insight',
+                       'suggestion', 'recommendation', 'output', 'answer',
+                       'message', 'text', 'result', 'response', 'reply'];
+      function decodeJSONLiteral(s) {
+        // Kaçış dizilerini çözmek için önce güvenli bir JSON string'i oluştur.
+        try {
+          const safe = s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+          return JSON.parse('"' + safe + '"');
+        } catch (_) { /* Gerekirse manuel çözümlere düş. */ }
+        // Basit manuel dönüşümler.
+        return s
+          .replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
+          .replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\r/g, '\r')
+          .replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+      }
+      for (const key of KEYS_RX) {
+        // "key":"..." kalıbını anahtar bazlı tara.
+        const rx = new RegExp('"' + key + '"\\s*:\\s*"([\\s\\S]*?)"\\s*[,}\\]]');
+        const m = trimmed.match(rx);
+        if (m && m[1]) {
+          let val = decodeJSONLiteral(m[1]);
+          val = val.trim();
+          if (val.startsWith('{') && val.endsWith('}')) {
+            // İç içe JSON geldiyse bir katman daha tara.
+            for (const k2 of KEYS_RX) {
+              const rx2 = new RegExp('"' + k2 + '"\\s*:\\s*"([\\s\\S]*?)"\\s*[,}\\]]');
+              const m2 = val.match(rx2);
+              if (m2 && m2[1]) {
+                const inner = decodeJSONLiteral(m2[1]).trim();
+                if (inner) return inner;
+              }
+            }
+          }
+          if (val && val !== 'null') return val;
+        }
+      }
+
+      return trimmed;
+    }
+
+    function launchConfetti() {
+      const layer = els.puqConfetti;
+      if (!layer) return;
+      layer.innerHTML = '';
+      const colors = ['#10b981','#34d399','#6ee7b7','#fbbf24','#60a5fa','#a78bfa','#f472b6'];
+      const layerWidth = layer.clientWidth || 800;
+      const N = 36;
+      for (let i = 0; i < N; i++) {
+        const piece = document.createElement('span');
+        piece.className = 'confetti-piece';
+        const left = Math.random() * layerWidth;
+        const dx = (Math.random() - 0.5) * 240;
+        const rot = (Math.random() * 720 - 360).toFixed(0) + 'deg';
+        const dur = (1600 + Math.random() * 1400) + 'ms';
+        const delay = (Math.random() * 220) + 'ms';
+        const color = colors[i % colors.length];
+        const w = 6 + Math.floor(Math.random() * 6);
+        const h = 10 + Math.floor(Math.random() * 8);
+        piece.style.left = left + 'px';
+        piece.style.width = w + 'px';
+        piece.style.height = h + 'px';
+        piece.style.background = color;
+        piece.style.setProperty('--dx', dx + 'px');
+        piece.style.setProperty('--rot', rot);
+        piece.style.setProperty('--dur', dur);
+        piece.style.setProperty('--delay', delay);
+        layer.appendChild(piece);
+      }
+      // Dört saniye sonra DOM'u temizle.
+      clearTimeout(launchConfetti._t);
+      launchConfetti._t = setTimeout(() => { layer.innerHTML = ''; }, 4000);
+    }
+
+    function showPuqSuggestion(data) {
+      const text = extractSuggestionText(data.forwardedBody)
+        || `Puq.ai akışı tetiklendi — analiz sonucu kısa süre içinde hazır olacak.`;
+      els.puqSuggestionMeta.textContent =
+        `${data.frameCount} kare · ${data.totalPersonDetections} tespit · puq ${data.forwardedStatus}${data.partial ? ' · kısmi' : ''}`;
+      els.puqSuggestionBody.textContent = text;
+      els.puqSuggestionTime.textContent = new Date().toLocaleTimeString();
+      // Kartı yeniden görünür duruma getir.
+      els.puqSuggestion.classList.remove('hidden');
+      els.puqSuggestion.classList.remove('show');
+      // Animasyonu sıfırlayıp tekrar başlat.
+      void els.puqSuggestion.offsetWidth;
+      els.puqSuggestion.classList.add('show');
+      launchConfetti();
+      els.puqSuggestion.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function hidePuqSuggestion() {
+      els.puqSuggestion.classList.remove('show');
+      els.puqSuggestion.classList.add('hidden');
+      if (els.puqConfetti) els.puqConfetti.innerHTML = '';
+    }
+
+    els.puqDismissBtn.addEventListener('click', hidePuqSuggestion);
+    els.puqResyncBtn.addEventListener('click', () => els.puqSyncBtn.click());
+
+    async function runPuqSync() {
+      els.puqSyncBtn.disabled = true;
+      els.puqResyncBtn.disabled = true;
+      els.puqSyncIcon.classList.add('animate-spin');
+      const prevLabel = els.puqSyncLabel.textContent;
+      els.puqSyncLabel.textContent = 'Gönderiliyor...';
+      try {
+        const r = await fetch('/api/puq/sync', {
+          method: 'POST',
+          credentials: 'same-origin',
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !data.ok) {
+          throw new Error(data.error || `Puq.ai HTTP ${data.forwardedStatus || r.status}`);
+        }
+        // Hata bildirimi açıksa kapat ve başarı kartını göster.
+        els.puqToast.classList.add('hidden');
+        showPuqSuggestion(data);
+      } catch (err) {
+        hidePuqSuggestion();
+        showPuqToast('err', `Gönderilemedi: ${err.message}`);
+      } finally {
+        els.puqSyncIcon.classList.remove('animate-spin');
+        els.puqSyncLabel.textContent = prevLabel;
+        els.puqSyncBtn.disabled = false;
+        els.puqResyncBtn.disabled = false;
+      }
+    }
+
+    els.puqSyncBtn.addEventListener('click', runPuqSync);
+
+    // Thumbnail oluşturma
+    function buildThumbs(container, isMobile) {
+      container.innerHTML = '';
+      for (const v of VIEWS) {
+        const btn = document.createElement('button');
+        btn.dataset.viewId = v.id;
+        btn.className = `thumb group relative ${isMobile ? 'aspect-video' : 'aspect-video'} w-full overflow-hidden rounded-lg border border-white/10 bg-ink-850 text-left`;
+        btn.innerHTML = `
+          <div class="thumb-loader absolute inset-0 grid place-items-center text-slate-500">
+            <div class="flex flex-col items-center gap-1.5">
+              <div class="spinner sm"></div>
+              <span class="text-[10px]">yükleniyor</span>
+            </div>
+          </div>
+          <img class="thumb-img view-img absolute inset-0 h-full w-full object-cover" alt="" />
+          ${v.type === 'heatmap' ? `
+            <div class="thumb-heat absolute inset-0">
+              <div class="dot-grid absolute inset-0 opacity-50"></div>
+              <div class="absolute left-[22%] top-[42%] h-12 w-12 -translate-x-1/2 -translate-y-1/2 rounded-full"
+                style="background: radial-gradient(circle, rgba(255,70,60,0.5), transparent 70%);"></div>
+              <div class="absolute left-[60%] top-[55%] h-14 w-14 -translate-x-1/2 -translate-y-1/2 rounded-full"
+                style="background: radial-gradient(circle, rgba(255,215,0,0.4), transparent 75%);"></div>
+              <div class="absolute left-[80%] top-[35%] h-10 w-10 -translate-x-1/2 -translate-y-1/2 rounded-full"
+                style="background: radial-gradient(circle, rgba(60,200,255,0.35), transparent 75%);"></div>
+            </div>
+          ` : ''}
+          <div class="absolute inset-x-0 bottom-0 flex items-center justify-between bg-gradient-to-t from-ink-950/95 to-transparent px-2 py-1.5">
+            <span class="font-mono text-[10px] uppercase tracking-wider text-white">${v.label}</span>
+            <span class="thumb-status font-mono text-[9px] uppercase tracking-wider text-slate-500">—</span>
+          </div>
+        `;
+        btn.addEventListener('click', () => selectView(v.id));
+        container.appendChild(btn);
+      }
+    }
+
+    // Ana görünüm çizimi
+    function renderMain(viewId) {
+      const v = VIEWS.find(x => x.id === viewId);
+      if (!v) return;
+      els.mainLabel.textContent = v.label;
+
+      if (v.type === 'heatmap') {
+        els.mainView.classList.add('heatmap-mode');
+        els.mainLabelBadge.style.display = 'none';
+        els.mainTimestampBadge.style.display = 'none';
+        els.mainImg.style.display = 'none';
+        els.mainImg.classList.remove('loaded');
+        if (els.heatmapFrame.getAttribute('src') !== '/heatmap.html') {
+          els.heatmapFrame.setAttribute('src', '/heatmap.html');
+        }
+        els.heatmapFrame.style.display = 'block';
+        els.mainLoader.style.display = 'none';
+        return;
+      }
+
+      els.mainView.classList.remove('heatmap-mode');
+      els.mainLabelBadge.style.display = 'inline-flex';
+      els.mainTimestampBadge.style.display = 'inline-flex';
+      els.heatmapFrame.style.display = 'none';
+      const state = viewsState.find(x => x.viewId === viewId);
+      if (!state || !state.hasSnapshot) {
+        els.mainImg.style.display = 'none';
+        els.mainLoader.style.display = 'grid';
+        els.mainTimestamp.textContent = '—';
+        return;
+      }
+      els.mainLoader.style.display = 'none';
+      els.mainImg.style.display = 'block';
+      const url = `/api/snapshot/${viewId}?t=${state.receivedAt || Date.now()}`;
+      // Yalnızca URL değiştiyse yeniden yükle; böylece gereksiz titreme azalır.
+      if (els.mainImg.src !== location.origin + url && !els.mainImg.src.endsWith(url)) {
+        els.mainImg.classList.remove('loaded');
+        els.mainImg.onload = () => els.mainImg.classList.add('loaded');
+        els.mainImg.src = url;
+      } else if (!els.mainImg.complete) {
+        els.mainImg.onload = () => els.mainImg.classList.add('loaded');
+      } else {
+        els.mainImg.classList.add('loaded');
+      }
+      els.mainTimestamp.textContent = state.receivedAt
+        ? new Date(state.receivedAt).toLocaleTimeString()
+        : '—';
+    }
+
+    // Thumbnail güncelleme
+    function updateThumb(btn, viewId, state) {
+      const v = VIEWS.find(x => x.id === viewId);
+      const img = btn.querySelector('.thumb-img');
+      const loader = btn.querySelector('.thumb-loader');
+      const heat = btn.querySelector('.thumb-heat');
+      const status = btn.querySelector('.thumb-status');
+
+      if (v.type === 'heatmap') {
+        // Isı haritası thumbnail'inde gerçek snapshot yerine sabit bir önizleme kullanılır.
+        loader.style.display = 'none';
+        img.style.display = 'none';
+        if (heat) heat.style.display = 'block';
+        status.textContent = 'canlı';
+        status.classList.remove('text-slate-500');
+        status.classList.add('text-emerald-400');
+        return;
+      }
+
+      if (heat) heat.style.display = 'none';
+      if (!state || !state.hasSnapshot) {
+        loader.style.display = 'grid';
+        img.style.display = 'none';
+        status.textContent = 'bekleniyor';
+        status.classList.add('text-slate-500');
+        status.classList.remove('text-emerald-400');
+        return;
+      }
+      loader.style.display = 'none';
+      img.style.display = 'block';
+      const url = `/api/snapshot/${viewId}?t=${state.receivedAt || Date.now()}`;
+      if (!img.src.endsWith(url)) {
+        img.classList.remove('loaded');
+        img.onload = () => img.classList.add('loaded');
+        img.src = url;
+      } else {
+        img.classList.add('loaded');
+      }
+      status.textContent = state.receivedAt ? new Date(state.receivedAt).toLocaleTimeString() : 'aktif';
+      status.classList.remove('text-slate-500');
+      status.classList.add('text-emerald-400');
+    }
+
+    function syncActiveClass() {
+      document.querySelectorAll('button[data-view-id]').forEach(b => {
+        b.classList.toggle('active', parseInt(b.dataset.viewId, 10) === selectedViewId);
+      });
+    }
+
+    // Görünüm seçimi: UI -> sunucu
+    async function selectView(viewId) {
+      if (viewId === selectedViewId) return;
+      selectedViewId = viewId;
+      syncActiveClass();
+      els.statSelected.textContent = VIEWS.find(v => v.id === viewId).label;
+      renderMain(viewId);
+      try {
+        await fetch('/api/view', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ viewId }),
+        });
+      } catch (_) { /* Sunucu hatasını sessizce yoksay. */ }
+    }
+
+    // Polling: durum ve thumbnail güncellemeleri
+    async function pollViews() {
+      try {
+        const r = await fetch('/api/views', { credentials: 'same-origin', cache: 'no-store' });
+        if (!r.ok) throw new Error('views HTTP ' + r.status);
+        const data = await r.json();
+        viewsState = data.views || [];
+
+        if (selectedViewId == null) {
+          // İlk yüklemede sunucunun seçili viewId değerini kullan.
+          selectedViewId = typeof data.selectedViewId === 'number' ? data.selectedViewId : 0;
+          syncActiveClass();
+          els.statSelected.textContent = VIEWS.find(v => v.id === selectedViewId).label;
+          renderMain(selectedViewId);
+        }
+
+        // Thumbnail görünümlerini güncelle.
+        for (const containerEl of [els.thumbsDesktop, els.thumbsMobile]) {
+          containerEl.querySelectorAll('button[data-view-id]').forEach(btn => {
+            const id = parseInt(btn.dataset.viewId, 10);
+            const state = viewsState.find(x => x.viewId === id);
+            updateThumb(btn, id, state);
+          });
+        }
+
+        // Ana görünümü yalnızca seçili kamera değiştiyse yenile.
+        if (selectedViewId !== 0) renderMain(selectedViewId);
+
+        // Doluluk istatistiği yalnızca 1..4 arası kamera slotları için hesaplanır.
+        const filled = viewsState.filter(x => x.viewId !== 0 && x.hasSnapshot).length;
+        els.statFilled.textContent = `${filled} / 4`;
+        els.statUpdated.textContent = new Date().toLocaleTimeString();
+        els.liveDot.classList.remove('bg-rose-400'); els.liveDot.classList.add('bg-emerald-400');
+        els.liveStatus.textContent = 'Canlı';
+      } catch (err) {
+        els.liveDot.classList.remove('bg-emerald-400'); els.liveDot.classList.add('bg-rose-400');
+        els.liveStatus.textContent = 'Bağlantı Yok';
+      }
+    }
+
+    // Başlatma
+    function boot() {
+      buildThumbs(els.thumbsDesktop, false);
+      buildThumbs(els.thumbsMobile,  true);
+      pollViews();
+      setInterval(pollViews, POLL_MS);
+    }
+  </script>
+</body>
+</html>

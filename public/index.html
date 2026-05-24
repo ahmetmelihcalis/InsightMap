@@ -1,0 +1,778 @@
+﻿<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>InsightMap - Saha hareketinin net görünümü</title>
+    <meta
+      name="description"
+      content="InsightMap, mevcut saha kameralarından gelen akışı tek ekranda okunur hale getirir. Hangi alanların ilgi gördüğünü ve hareketin nerede toplandığını sade bir ısı haritasıyla gösterir."
+    />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto+Flex:wght@400;500;600;700;800&family=Roboto+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              ink: {
+                950: '#0b1421',
+                900: '#132033',
+                850: '#1a2a40',
+                800: '#22344d',
+                700: '#2d4461',
+                600: '#3a5476',
+              },
+              atlas: {
+                400: '#6ed8d7',
+                500: '#42c1c7',
+                600: '#1f9eab',
+              },
+              halo: {
+                400: '#ff9d85',
+                500: '#ff7468',
+                600: '#f2585f',
+              },
+              heat: {
+                cold: '#3b82f6',
+                cool: '#06b6d4',
+                warm: '#f59e0b',
+                hot: '#ef4444',
+              },
+            },
+            fontFamily: {
+              sans: ['"Roboto Flex"', 'system-ui', 'sans-serif'],
+              mono: ['"Roboto Mono"', 'ui-monospace', 'monospace'],
+            },
+            gridTemplateColumns: {
+              '24': 'repeat(24, minmax(0, 1fr))',
+            },
+            boxShadow: {
+              'glow-sm': '0 0 0 1px rgba(66,193,199,0.16), 0 8px 24px -12px rgba(13,27,111,0.28)',
+              'glow': '0 0 0 1px rgba(66,193,199,0.22), 0 18px 42px -24px rgba(13,27,111,0.34)',
+            },
+          },
+        },
+      };
+    </script>
+
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+
+  <body class="bg-ink-900 text-slate-200 font-sans antialiased selection:bg-halo-500/20 selection:text-white">
+    <!-- Arka plan atmosferi -->
+    <div class="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+      <div class="absolute -top-44 left-1/2 h-[520px] w-[980px] -translate-x-1/2 rounded-full bg-atlas-500/12 blur-[120px]"></div>
+      <div class="absolute top-[18%] right-[-80px] h-[340px] w-[340px] rounded-full bg-halo-500/12 blur-[100px]"></div>
+      <div class="absolute bottom-[-120px] left-[8%] h-[280px] w-[280px] rounded-full bg-white/5 blur-[120px]"></div>
+    </div>
+    <div class="dot-grid fixed inset-0 -z-10 opacity-100 [mask-image:radial-gradient(ellipse_at_center,black,transparent_91%)]"></div>
+    <div class="pointer-events-none fixed inset-0 -z-10 opacity-[0.11] [background-image:linear-gradient(rgba(255,255,255,0.62)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.62)_1px,transparent_1px)] [background-size:48px_48px] [mask-image:radial-gradient(ellipse_at_center,black,transparent_92%)]"></div>
+
+    <!-- Üst gezinme alanı -->
+    <header class="sticky top-0 z-50 border-b border-white/10 bg-[#0e1828]/95 backdrop-blur shadow-[0_14px_34px_-24px_rgba(2,6,23,0.8)]">
+      <nav class="mx-auto flex max-w-7xl items-center justify-between px-6 py-3.5">
+        <a href="#" class="group flex items-center gap-3">
+          <span class="flex h-12 items-center rounded-2xl border border-slate-200 bg-gradient-to-r from-white via-[#f8fcff] to-[#fff7f4] px-3 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)] transition group-hover:border-slate-300">
+            <img src="/logo.png" alt="InsightMap" class="h-9 w-auto" />
+          </span>
+        </a>
+
+        <div class="hidden items-center gap-2 rounded-full border border-slate-200 bg-slate-50/80 p-1 text-sm text-slate-600 lg:flex">
+          <a href="#problem" class="rounded-full px-4 py-2 transition hover:bg-white hover:text-ink-900">Problem</a>
+          <a href="#demo" class="rounded-full px-4 py-2 transition hover:bg-white hover:text-ink-900">Demo</a>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <a
+            href="/login.html"
+            class="hidden rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-[0_8px_24px_-24px_rgba(15,23,42,0.3)] transition hover:border-slate-300 hover:bg-slate-50 hover:text-ink-900 sm:inline-flex"
+            >Giriş yap</a
+          >
+          <a
+            href="/register.html"
+            class="group inline-flex items-center gap-1.5 rounded-xl bg-ink-900 px-4 py-2.5 text-sm font-medium text-white shadow-[0_16px_32px_-22px_rgba(11,23,40,0.55)] transition hover:bg-ink-800"
+          >
+            Kayıt ol
+            <svg class="h-3.5 w-3.5 transition group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+          </a>
+        </div>
+      </nav>
+    </header>
+
+    <!-- Hero alanı -->
+    <section class="relative overflow-hidden">
+      <div class="dot-grid absolute inset-0 opacity-100 [mask-image:radial-gradient(ellipse_at_top,black_52%,transparent_88%)]"></div>
+
+      <div class="relative mx-auto max-w-7xl px-6 pt-12 pb-28 sm:pt-16 sm:pb-36 lg:pt-20">
+        <div class="mx-auto max-w-3xl text-center">
+          <h1 class="mt-8 text-balance text-5xl font-semibold leading-[1.05] tracking-tight text-white sm:text-6xl lg:text-7xl">
+            Sahadaki Yoğunluğu, <span class="text-gradient">Tek Bakışta</span> Anlamlandırın.
+          </h1>
+
+          <p class="mx-auto mt-7 max-w-2xl text-pretty text-lg leading-relaxed text-slate-300">
+            InsightMap, mevcut kamera görüntüsünden gelen yoğunluğu sade bir ısı haritasına çevirir.
+            Hangi alanların ilgi gördüğünü, hareketin gün içinde nereye kaydığını ve hangi bölgelerin
+            yeniden bakılması gerektiğini tek ekranda gösterir.
+          </p>
+
+          <div class="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <a
+              href="#demo"
+              class="group inline-flex w-full items-center justify-center gap-2 rounded-xl bg-ink-900 px-5 py-3 text-sm font-medium text-white shadow-glow transition hover:bg-ink-800 sm:w-auto"
+            >
+              Canlı demoyu gör
+              <svg class="h-4 w-4 transition group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+            </a>
+            <a
+              href="/login.html"
+              class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-5 py-3 text-sm text-slate-200 transition hover:border-white/20 hover:bg-white/[0.08] sm:w-auto"
+            >
+              <svg class="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              Giriş yap
+            </a>
+          </div>
+        </div>
+
+        <!-- Hero görseli: sahaya ait ısı haritası maketi -->
+        <div class="reveal relative mx-auto mt-20 max-w-5xl">
+          <div class="absolute -inset-3 rounded-3xl bg-gradient-to-tr from-atlas-500/10 via-white/5 to-halo-500/10 blur-2xl"></div>
+          <div class="relative overflow-hidden rounded-2xl border border-white/10 bg-[#182233] shadow-[0_30px_90px_-42px_rgba(0,0,0,0.55)]">
+            <div class="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent"></div>
+            <div class="pointer-events-none absolute right-10 top-10 h-28 w-28 rounded-full bg-white/[0.03] blur-3xl"></div>
+            <!-- Üst araç çubuğu -->
+            <div class="flex items-center gap-3 border-b border-white/5 bg-[#141d2c] px-4 py-3">
+              <div class="flex items-center gap-1.5">
+                <span class="h-2.5 w-2.5 rounded-full bg-rose-400/70"></span>
+                <span class="h-2.5 w-2.5 rounded-full bg-amber-400/70"></span>
+                <span class="h-2.5 w-2.5 rounded-full bg-emerald-400/70"></span>
+              </div>
+              <div class="ml-2 flex-1 rounded-md border border-white/10 bg-white/[0.04] px-3 py-1 font-mono text-[11px] text-slate-500">
+                insightmap.app / sahalar / kadıköy-merkez
+              </div>
+              <span class="hidden font-mono text-[10px] uppercase tracking-wider text-emerald-400 sm:inline">● canlı</span>
+            </div>
+
+            <!-- İçerik alanı -->
+            <div class="grid grid-cols-12 gap-0">
+              <!-- Ana ısı haritası alanı -->
+              <div class="col-span-12 p-5 sm:p-6">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p class="font-mono text-[10px] uppercase tracking-wider text-slate-500">Saha planı · Isı haritası</p>
+                    <h3 class="mt-1 text-lg font-medium text-white">Kadıköy Merkez · Son 24 saat</h3>
+                  </div>
+                </div>
+
+                <!-- Üstten görünüm saha SVG'i -->
+                <div class="relative mt-5 overflow-hidden rounded-lg border border-white/5 bg-ink-900/60">
+                  <svg viewBox="0 0 900 520" class="block h-auto w-full" preserveAspectRatio="xMidYMid meet">
+                    <defs>
+                      <radialGradient id="hot" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stop-color="#ef4444" stop-opacity="0.95" />
+                        <stop offset="55%" stop-color="#f97316" stop-opacity="0.45" />
+                        <stop offset="100%" stop-color="#f97316" stop-opacity="0" />
+                      </radialGradient>
+                      <radialGradient id="warm" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.8" />
+                        <stop offset="60%" stop-color="#f59e0b" stop-opacity="0.25" />
+                        <stop offset="100%" stop-color="#f59e0b" stop-opacity="0" />
+                      </radialGradient>
+                      <radialGradient id="cool" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.65" />
+                        <stop offset="100%" stop-color="#06b6d4" stop-opacity="0" />
+                      </radialGradient>
+                      <radialGradient id="cold" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.55" />
+                        <stop offset="100%" stop-color="#3b82f6" stop-opacity="0" />
+                      </radialGradient>
+                      <pattern id="floor-tiles" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
+                        <rect width="40" height="40" fill="rgba(255,255,255,0.012)"/>
+                        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.035)" stroke-width="0.6"/>
+                      </pattern>
+                      <linearGradient id="shelf-wood" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stop-color="rgba(255,255,255,0.08)"/>
+                        <stop offset="100%" stop-color="rgba(255,255,255,0.03)"/>
+                      </linearGradient>
+                    </defs>
+
+                    <!-- Saha sınırı ve zemin -->
+                    <rect x="16" y="16" width="868" height="488" rx="10" fill="url(#floor-tiles)" stroke="rgba(255,255,255,0.14)" stroke-width="1.2"/>
+
+                    <!-- Isı katmanının altındaki sabit saha elemanları -->
+                    <g stroke="rgba(255,255,255,0.16)" stroke-width="1">
+
+                      <!-- Üst duvar: denim ve aksesuar alanı -->
+                      <g fill="url(#shelf-wood)">
+                        <rect x="40" y="32" width="120" height="14" rx="2"/>
+                        <rect x="180" y="32" width="220" height="14" rx="2"/>
+                        <rect x="420" y="32" width="180" height="14" rx="2"/>
+                      </g>
+
+                      <!-- Sağ üstte premium köşe -->
+                      <g fill="rgba(180,140,90,0.18)" stroke="rgba(200,160,100,0.45)">
+                        <path d="M 700 24 L 868 24 L 868 110 L 760 110 Z"/>
+                      </g>
+                      <g fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.2)">
+                        <rect x="720" y="56" width="120" height="10" rx="2"/>
+                        <rect x="760" y="76" width="100" height="10" rx="2"/>
+                      </g>
+
+                      <!-- Sol duvar: kahve ve premium saat bölümü -->
+                      <g fill="rgba(255,255,255,0.05)">
+                        <rect x="32" y="80" width="46" height="120" rx="3"/>
+                        <rect x="32" y="220" width="46" height="160" rx="3"/>
+                      </g>
+
+                      <!-- Hazırlık masası -->
+                      <g transform="translate(165 130) rotate(-22)" fill="url(#shelf-wood)" stroke="rgba(220,180,120,0.4)">
+                        <rect x="-60" y="-26" width="120" height="52" rx="4"/>
+                        <line x1="-60" y1="-13" x2="60" y2="-13" stroke="rgba(255,255,255,0.12)"/>
+                        <line x1="-60" y1="0"   x2="60" y2="0"   stroke="rgba(255,255,255,0.12)"/>
+                        <line x1="-60" y1="13"  x2="60" y2="13"  stroke="rgba(255,255,255,0.12)"/>
+                        <line x1="-30" y1="-26" x2="-30" y2="26" stroke="rgba(255,255,255,0.12)"/>
+                        <line x1="0"   y1="-26" x2="0"   y2="26" stroke="rgba(255,255,255,0.12)"/>
+                        <line x1="30"  y1="-26" x2="30"  y2="26" stroke="rgba(255,255,255,0.12)"/>
+                      </g>
+
+                      <!-- Yuvarlak sergileme adası -->
+                      <g transform="translate(330 120)" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.22)">
+                        <circle r="42"/>
+                        <circle r="22" fill="rgba(255,255,255,0.06)"/>
+                        <line x1="-42" y1="0" x2="-22" y2="0" stroke="rgba(255,255,255,0.14)"/>
+                        <line x1="22"  y1="0" x2="42"  y2="0" stroke="rgba(255,255,255,0.14)"/>
+                        <line x1="0" y1="-42" x2="0" y2="-22" stroke="rgba(255,255,255,0.14)"/>
+                        <line x1="0" y1="22"  x2="0" y2="42"  stroke="rgba(255,255,255,0.14)"/>
+                      </g>
+
+                      <!-- Orta aksesuar adası -->
+                      <g fill="url(#shelf-wood)">
+                        <rect x="248" y="220" width="180" height="40" rx="3"/>
+                        <line x1="248" y1="240" x2="428" y2="240" stroke="rgba(255,255,255,0.14)"/>
+                        <line x1="308" y1="220" x2="308" y2="260" stroke="rgba(255,255,255,0.14)"/>
+                        <line x1="368" y1="220" x2="368" y2="260" stroke="rgba(255,255,255,0.14)"/>
+                      </g>
+
+                      <!-- Erkek giyim askılıkları -->
+                      <g transform="translate(540 160) rotate(-12)" fill="url(#shelf-wood)">
+                        <rect x="-130" y="-9" width="260" height="18" rx="3"/>
+                      </g>
+                      <g transform="translate(540 200) rotate(-12)" fill="url(#shelf-wood)">
+                        <rect x="-130" y="-9" width="260" height="18" rx="3"/>
+                      </g>
+
+                      <!-- Ayakkabı sergileme rafları -->
+                      <g transform="translate(620 280) rotate(-22)" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.2)">
+                        <rect x="-110" y="-22" width="220" height="44" rx="3"/>
+                        <line x1="-110" y1="0" x2="110" y2="0"/>
+                        <line x1="-70" y1="-22" x2="-70" y2="22"/>
+                        <line x1="-30" y1="-22" x2="-30" y2="22"/>
+                        <line x1="10"  y1="-22" x2="10"  y2="22"/>
+                        <line x1="50"  y1="-22" x2="50"  y2="22"/>
+                      </g>
+
+                      <!-- Ayakkabı sıraları -->
+                      <g fill="url(#shelf-wood)">
+                        <g transform="translate(700 360) rotate(-22)">
+                          <rect x="-90" y="-6" width="180" height="12" rx="2"/>
+                        </g>
+                        <g transform="translate(740 400) rotate(-22)">
+                          <rect x="-80" y="-6" width="160" height="12" rx="2"/>
+                        </g>
+                      </g>
+
+                      <!-- Özel koleksiyon adası -->
+                      <g transform="translate(420 380)" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.22)">
+                        <polygon points="-40,-22 40,-22 60,0 40,22 -40,22 -60,0"/>
+                        <polygon points="-22,-12 22,-12 32,0 22,12 -22,12 -32,0" fill="rgba(255,255,255,0.06)"/>
+                      </g>
+
+                      <!-- Ana kasa bankosu -->
+                      <g fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.25)">
+                        <path d="M 130 320 L 280 320 L 280 350 L 170 350 L 170 470 L 130 470 Z"/>
+                      </g>
+                      <!-- POS terminalleri -->
+                      <g fill="rgba(120,200,255,0.18)" stroke="rgba(120,200,255,0.4)">
+                        <rect x="160" y="328" width="14" height="14" rx="2"/>
+                        <rect x="190" y="328" width="14" height="14" rx="2"/>
+                        <rect x="220" y="328" width="14" height="14" rx="2"/>
+                        <rect x="250" y="328" width="14" height="14" rx="2"/>
+                      </g>
+
+                      <!-- Merdiven alanı -->
+                      <g fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.18)">
+                        <rect x="40" y="400" width="74" height="80" rx="2"/>
+                        <line x1="40" y1="416" x2="114" y2="416"/>
+                        <line x1="40" y1="432" x2="114" y2="432"/>
+                        <line x1="40" y1="448" x2="114" y2="448"/>
+                        <line x1="40" y1="464" x2="114" y2="464"/>
+                      </g>
+
+                      <!-- Lounge ve oturma alanı -->
+                      <g fill="rgba(255,255,255,0.035)" stroke="rgba(255,255,255,0.16)">
+                        <rect x="300" y="460" width="280" height="36" rx="6"/>
+                      </g>
+                      <g fill="rgba(255,255,255,0.07)" stroke="rgba(255,255,255,0.2)">
+                        <rect x="312" y="468" width="36" height="22" rx="3"/>
+                        <rect x="358" y="468" width="36" height="22" rx="3"/>
+                        <rect x="404" y="468" width="36" height="22" rx="3"/>
+                        <rect x="450" y="468" width="36" height="22" rx="3"/>
+                        <rect x="496" y="468" width="36" height="22" rx="3"/>
+                        <rect x="542" y="468" width="36" height="22" rx="3"/>
+                      </g>
+
+                      <!-- Kadın giyim rafları -->
+                      <g fill="url(#shelf-wood)">
+                        <g transform="translate(800 280) rotate(-22)"><rect x="-50" y="-6" width="100" height="12" rx="2"/></g>
+                        <g transform="translate(820 300) rotate(-22)"><rect x="-44" y="-6" width="88"  height="12" rx="2"/></g>
+                        <g transform="translate(830 340) rotate(-22)"><rect x="-44" y="-6" width="88"  height="12" rx="2"/></g>
+                        <g transform="translate(820 240) rotate(-22)"><rect x="-30" y="-6" width="60"  height="12" rx="2"/></g>
+                      </g>
+
+                      <!-- Dekoratif bitkiler -->
+                      <g fill="rgba(110,180,140,0.4)">
+                        <circle cx="278" cy="296" r="5"/>
+                        <circle cx="600" cy="450" r="5"/>
+                        <circle cx="660" cy="464" r="5"/>
+                        <circle cx="690" cy="60"  r="5"/>
+                        <circle cx="118" cy="380" r="5"/>
+                      </g>
+                    </g>
+
+                    <!-- Isı katmanları -->
+                    <g style="mix-blend-mode: screen;">
+                      <!-- Sıcak bölge: sağdaki kadın giyim -->
+                      <circle cx="820" cy="300" r="140" fill="url(#hot)" />
+                      <!-- Sıcak bölge: kasa kuyruğu -->
+                      <circle cx="220" cy="360" r="130" fill="url(#hot)" />
+                      <!-- Ilık bölge: erkek giyim rafları -->
+                      <circle cx="560" cy="200" r="110" fill="url(#warm)" />
+                      <!-- Ilık bölge: aksesuar adası -->
+                      <circle cx="340" cy="240" r="90" fill="url(#warm)" />
+                      <!-- Serin bölge: ayakkabı tarafı -->
+                      <circle cx="700" cy="380" r="100" fill="url(#cool)" />
+                      <!-- Serin bölge: lounge -->
+                      <circle cx="440" cy="478" r="100" fill="url(#cool)" />
+                      <!-- Serin bölge: premium saat -->
+                      <circle cx="60"  cy="280" r="90"  fill="url(#cool)" />
+                      <!-- Soğuk bölge: üst denim duvarı -->
+                      <circle cx="280" cy="60"  r="90"  fill="url(#cold)" />
+                      <circle cx="500" cy="70"  r="80"  fill="url(#cold)" />
+                      <!-- Soğuk bölge: premium köşe -->
+                      <circle cx="800" cy="80"  r="80"  fill="url(#cold)" />
+                      <!-- Soğuk bölge: merdiven -->
+                      <circle cx="76"  cy="440" r="80"  fill="url(#cold)" />
+
+                      <!-- Yükselen hotspot vurgusu -->
+                      <g>
+                        <circle cx="396" cy="240" r="48" fill="url(#warm)" opacity="0.9"/>
+                        <circle cx="396" cy="240" r="6"  fill="#f59e0b"/>
+                        <circle cx="396" cy="240" r="12" fill="#f59e0b" fill-opacity="0.35" class="animate-ping"/>
+                      </g>
+                    </g>
+
+                    <!-- Etiketler -->
+                    <g font-family="Roboto Mono, monospace" font-size="9" fill="rgba(255,255,255,0.55)" letter-spacing="0.04em">
+                      <text x="180" y="62">DENIM WALL · TEKSTIL</text>
+                      <text x="710" y="46" fill="rgba(245,180,120,0.85)">PREMIUM KÖŞE</text>
+                      <text x="32"  y="74">KAHVE</text>
+                      <text x="32"  y="215">PRM. SAAT</text>
+                      <text x="290" y="100">PREP TABLE</text>
+                      <text x="306" y="180">ROLLER</text>
+                      <text x="280" y="282">AKSESUAR</text>
+                      <text x="450" y="148">ERKEK</text>
+                      <text x="555" y="280">AYAKKABI</text>
+                      <text x="395" y="384">ÖZEL KOLEK.</text>
+                      <text x="180" y="340">KASA</text>
+                      <text x="42"  y="394">MERDIVEN</text>
+                      <text x="390" y="456">LOUNGE</text>
+                      <text x="790" y="220">KADIN</text>
+                    </g>
+
+                    <!-- Uyarı etiketi -->
+                    <g>
+                      <line x1="396" y1="240" x2="476" y2="208" stroke="rgba(251,191,36,0.55)" stroke-width="0.8" stroke-dasharray="2 3"/>
+                      <rect x="476" y="194" width="120" height="22" rx="11" fill="rgba(15,18,30,0.85)" stroke="rgba(251,191,36,0.6)"/>
+                      <circle cx="490" cy="205" r="3" fill="#fbbf24"/>
+                      <text x="500" y="209" font-family="Roboto Mono, monospace" font-size="10" fill="#fbbf24">trafik ısınıyor</text>
+                    </g>
+                  </svg>
+
+                  <!-- Grafik lejandı -->
+                  <div class="pointer-events-none absolute right-3 top-3 hidden items-center gap-2 rounded-md border border-white/10 bg-ink-900/80 px-2.5 py-1 backdrop-blur sm:flex">
+                    <span class="font-mono text-[10px] uppercase tracking-wider text-slate-400">soğuk</span>
+                    <span class="h-1.5 w-20 rounded-full bg-gradient-to-r from-blue-500 via-cyan-400 via-amber-400 to-rose-500"></span>
+                    <span class="font-mono text-[10px] uppercase tracking-wider text-slate-400">sıcak</span>
+                  </div>
+
+                  <!-- Ölçek ve yön rozeti -->
+                  <div class="pointer-events-none absolute bottom-3 left-3 hidden items-center gap-2 rounded-md border border-white/10 bg-ink-900/80 px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-slate-500 backdrop-blur sm:flex">
+                    <svg viewBox="0 0 24 24" class="h-3 w-3 text-slate-400" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M5 9l7-7 7 7"/></svg>
+                    Kuzey · 1:120
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Güven ve prensipler alanı -->
+    <section class="relative border-y-2 border-white/10 bg-white/[0.03] py-14">
+      <!-- Arka plan parıltısı -->
+      <div class="pointer-events-none absolute inset-0 -z-0 overflow-hidden">
+        <div class="absolute left-1/2 top-0 h-40 w-[60%] -translate-x-1/2 rounded-full bg-atlas-500/5 blur-3xl"></div>
+      </div>
+
+      <div class="relative mx-auto max-w-7xl px-6">
+        <div class="mb-8 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p class="font-mono text-[11px] uppercase tracking-[0.2em] text-atlas-400">Tasarım prensipleri</p>
+            <h2 class="mt-1 text-2xl font-semibold tracking-tight text-white sm:text-[26px]">Bu Yapıda Neyi Bilinçli Seçtik</h2>
+          </div>
+          <p class="max-w-md text-sm leading-relaxed text-slate-300">
+            Buradaki mantık oldukça sade: alanda zaten olan kameraları kullan, içeride ne olup bittiğini gün içinde gör
+            ve ekibin karar almasını kolaylaştır. Yeni bir yük çıkarmadan, mevcut işleyişin içine otursun.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <!-- Kart 1: Operatör kontrolü -->
+          <div class="group relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-emerald-500/[0.06] to-ink-900/60 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition hover:border-emerald-400/30 hover:from-emerald-500/[0.10]">
+            <div class="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent"></div>
+            <div class="pointer-events-none absolute right-0 top-0 h-24 w-24 rounded-full bg-white/[0.02] blur-2xl"></div>
+            <div class="flex items-start justify-between">
+              <span class="grid h-9 w-9 place-items-center rounded-lg border border-emerald-400/25 bg-emerald-400/10 text-emerald-300">
+                <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11V7a3 3 0 0 1 6 0v4"/><path d="M5 11h14l-1 9H6z"/></svg>
+              </span>
+              <span class="inline-flex items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-emerald-300">
+                <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>Karar
+              </span>
+            </div>
+            <p class="mt-5 font-mono text-[10px] uppercase tracking-wider text-slate-400">Kontrol Modeli</p>
+            <p class="mt-1 text-4xl font-semibold tracking-tight text-white">Operatör</p>
+            <div class="mt-3 flex items-center gap-2 text-[11px] text-slate-300">
+              <span class="rounded-md border border-emerald-400/25 bg-emerald-400/10 px-1.5 py-0.5 font-mono text-emerald-300">Sistem İzler</span>
+              <svg viewBox="0 0 24 24" class="h-3 w-3 text-slate-500" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+              <span class="rounded-md border border-white/10 bg-white/[0.04] px-1.5 py-0.5 font-mono">Ekip Karar Verir</span>
+            </div>
+            <p class="mt-3 text-xs text-slate-300">Sistem tek başına hüküm vermez; ekip neye bakması gerektiğini daha hızlı görür.</p>
+          </div>
+
+          <!-- Kart 2: Veri granülerliği -->
+          <div class="group relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-atlas-500/[0.06] to-ink-900/60 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition hover:border-atlas-400/30 hover:from-atlas-500/[0.10]">
+            <div class="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent"></div>
+            <div class="pointer-events-none absolute right-0 top-0 h-24 w-24 rounded-full bg-white/[0.02] blur-2xl"></div>
+            <div class="flex items-start justify-between">
+              <span class="grid h-9 w-9 place-items-center rounded-lg border border-atlas-400/25 bg-atlas-400/10 text-atlas-400">
+                <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+              </span>
+              <span class="inline-flex items-center gap-1 rounded-full border border-atlas-400/25 bg-atlas-400/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-atlas-400">
+                <span class="h-1.5 w-1.5 animate-pulse rounded-full bg-atlas-400"></span>İzleme
+              </span>
+            </div>
+            <p class="mt-5 font-mono text-[10px] uppercase tracking-wider text-slate-400">Güncelleme Sıklığı</p>
+            <p class="mt-1 text-2xl font-semibold tracking-tight text-white">Kısa aralıkla<span class="block text-base text-slate-400">güncellenir</span></p>
+            <!-- Küçük bar animasyonu -->
+            <div class="mt-3 flex h-10 items-end gap-1">
+              <div class="h-3 w-full rounded-sm bg-atlas-400/25"></div>
+              <div class="h-5 w-full rounded-sm bg-atlas-400/35"></div>
+              <div class="h-4 w-full rounded-sm bg-atlas-400/30"></div>
+              <div class="h-7 w-full rounded-sm bg-atlas-400/50"></div>
+              <div class="h-5 w-full rounded-sm bg-atlas-400/35"></div>
+              <div class="h-9 w-full rounded-sm bg-atlas-400/70"></div>
+              <div class="h-6 w-full rounded-sm bg-atlas-400/40"></div>
+              <div class="h-10 w-full rounded-sm bg-atlas-400"></div>
+            </div>
+            <p class="mt-2 text-xs text-slate-500">Veri kısa aralıklarla yenilenir, böylece akış gün içinde takip edilebilir.</p>
+          </div>
+
+          <!-- Kart 3: Zaman pencereleri -->
+          <div class="group relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-halo-500/[0.06] to-ink-900/60 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition hover:border-halo-400/30 hover:from-halo-500/[0.10]">
+            <div class="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent"></div>
+            <div class="pointer-events-none absolute right-0 top-0 h-24 w-24 rounded-full bg-white/[0.02] blur-2xl"></div>
+            <div class="flex items-start justify-between">
+              <span class="grid h-9 w-9 place-items-center rounded-lg border border-halo-400/25 bg-halo-400/10 text-halo-400">
+                <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              </span>
+              <span class="inline-flex items-center gap-1 rounded-full border border-halo-400/25 bg-halo-400/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-halo-400">
+                <span class="h-1.5 w-1.5 rounded-full bg-halo-400"></span>Dönem
+              </span>
+            </div>
+            <p class="mt-5 font-mono text-[10px] uppercase tracking-wider text-slate-400">Zaman Pencereleri</p>
+            <p class="mt-1 text-4xl font-semibold tracking-tight text-white">8<span class="text-2xl text-halo-400">+</span></p>
+            <!-- Zaman etiketleri -->
+            <div class="mt-3 flex flex-wrap gap-1.5">
+              <span class="rounded-md border border-white/10 bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-slate-400">1s</span>
+              <span class="rounded-md border border-white/10 bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-slate-400">24s</span>
+              <span class="rounded-md border border-white/10 bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-slate-400">3g</span>
+              <span class="rounded-md border border-halo-400/30 bg-halo-400/10 px-1.5 py-0.5 font-mono text-[10px] text-halo-400">7g</span>
+              <span class="rounded-md border border-white/10 bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-slate-400">14g</span>
+              <span class="rounded-md border border-white/10 bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-slate-400">21g</span>
+              <span class="rounded-md border border-white/10 bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-slate-400">30g</span>
+              <span class="rounded-md border border-white/10 bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-slate-400">1y</span>
+            </div>
+            <p class="mt-2 text-xs text-slate-500">Aynı alanı farklı gün ve dönemlerde karşılaştırmak için esnek zaman aralıkları sunar.</p>
+          </div>
+
+          <!-- Kart 4: Ek donanım -->
+          <div class="group relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-rose-500/[0.06] to-ink-900/60 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition hover:border-rose-400/30 hover:from-rose-500/[0.10]">
+            <div class="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent"></div>
+            <div class="pointer-events-none absolute right-0 top-0 h-24 w-24 rounded-full bg-white/[0.02] blur-2xl"></div>
+            <div class="flex items-start justify-between">
+              <span class="grid h-9 w-9 place-items-center rounded-lg border border-rose-400/25 bg-rose-400/10 text-halo-600">
+                <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg>
+              </span>
+              <span class="inline-flex items-center gap-1 rounded-full border border-rose-400/25 bg-rose-400/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-halo-600">
+                <span class="h-1.5 w-1.5 rounded-full bg-rose-400"></span>Altyapı
+              </span>
+            </div>
+            <p class="mt-5 font-mono text-[10px] uppercase tracking-wider text-slate-500">Ek Donanım</p>
+            <p class="mt-1 text-4xl font-semibold tracking-tight text-white">0<span class="text-2xl text-slate-300"> adet</span></p>
+            <!-- Mevcut kamera göstergeleri -->
+            <div class="mt-3 grid h-10 grid-cols-8 items-center gap-1">
+              <div class="flex h-6 items-center justify-center rounded border border-emerald-400/30 bg-emerald-400/10">
+                <span class="h-1 w-1 rounded-full bg-emerald-400"></span>
+              </div>
+              <div class="flex h-6 items-center justify-center rounded border border-emerald-400/30 bg-emerald-400/10">
+                <span class="h-1 w-1 rounded-full bg-emerald-400"></span>
+              </div>
+              <div class="flex h-6 items-center justify-center rounded border border-emerald-400/30 bg-emerald-400/10">
+                <span class="h-1 w-1 rounded-full bg-emerald-400"></span>
+              </div>
+              <div class="flex h-6 items-center justify-center rounded border border-emerald-400/30 bg-emerald-400/10">
+                <span class="h-1 w-1 rounded-full bg-emerald-400"></span>
+              </div>
+              <div class="flex h-6 items-center justify-center rounded border border-emerald-400/30 bg-emerald-400/10">
+                <span class="h-1 w-1 rounded-full bg-emerald-400"></span>
+              </div>
+              <div class="flex h-6 items-center justify-center rounded border border-emerald-400/30 bg-emerald-400/10">
+                <span class="h-1 w-1 rounded-full bg-emerald-400"></span>
+              </div>
+              <div class="flex h-6 items-center justify-center rounded border border-white/10 bg-white/[0.03]">
+                <span class="font-mono text-[10px] text-slate-600">+</span>
+              </div>
+              <div class="flex h-6 items-center justify-center rounded border border-white/10 bg-white/[0.03]">
+                <span class="font-mono text-[10px] text-slate-600">+</span>
+              </div>
+            </div>
+            <p class="mt-2 text-xs text-slate-500">Çoğu senaryoda mevcut IP kamera altyapısı yeterli olur; ek kurulum gerekmez.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Problem alanı -->
+    <section id="problem" class="relative bg-white/[0.03] py-28">
+      <div class="mx-auto max-w-7xl px-6">
+        <div class="max-w-2xl">
+          <p class="font-mono text-[11px] uppercase tracking-[0.18em] text-atlas-400">Problem</p>
+          <h2 class="mt-3 text-balance text-3xl font-semibold tracking-tight text-white sm:text-4xl lg:text-5xl">
+            Akıştaki Sapmalar, <span class="text-slate-400">Gün Sonunda Değil</span> Anında Görülmeli.
+          </h2>
+          <p class="mt-5 text-pretty leading-relaxed text-slate-400">
+            Ziyaretçi davranışı saniye saniye değişiyor; oysa raf düzeni, stok ve vardiya kararları
+            haftalık alınıyor. InsightMap bu açığı kapatır.
+          </p>
+        </div>
+
+        <div class="mt-14 grid gap-5 md:grid-cols-3">
+          <article class="reveal group relative overflow-hidden rounded-2xl border border-white/5 bg-ink-850/60 p-7 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)] transition hover:border-white/10 hover:bg-ink-850">
+            <div class="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/16 to-transparent"></div>
+            <div class="flex items-center gap-3">
+              <span class="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.03] text-atlas-400">
+                <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+              </span>
+              <p class="font-mono text-[10px] uppercase tracking-wider text-slate-500">01 · Kör noktalar</p>
+            </div>
+            <h3 class="mt-5 text-lg font-medium text-white">Hangi Reyon İlgi Görüyor, Hangisi Sadece Geçiliyor?</h3>
+            <p class="mt-3 text-sm leading-relaxed text-slate-400">
+              Satış raporu yalnızca satın alınan ürünü gösterir. Müşterinin önünde durup bakıp geçtiği
+              raflar ise çoğu zaman görünmez kalır.
+            </p>
+            <ul class="mt-5 space-y-2 text-sm text-slate-400">
+              <li class="flex items-start gap-2"><span class="mt-1.5 h-1 w-1 rounded-full bg-atlas-500"></span>Ziyaret İle Satış Arasındaki Fark Görünmüyor</li>
+              <li class="flex items-start gap-2"><span class="mt-1.5 h-1 w-1 rounded-full bg-atlas-500"></span>Vitrinin İçeriye Etkisi Ölçülemiyor</li>
+              <li class="flex items-start gap-2"><span class="mt-1.5 h-1 w-1 rounded-full bg-atlas-500"></span>Düşük İlgi Gören Alanlar Geç Fark Ediliyor</li>
+            </ul>
+          </article>
+
+          <article class="reveal group relative overflow-hidden rounded-2xl border border-white/5 bg-ink-850/60 p-7 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)] transition hover:border-white/10 hover:bg-ink-850" style="animation-delay:80ms">
+            <div class="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/16 to-transparent"></div>
+            <div class="flex items-center gap-3">
+              <span class="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.03] text-rose-400">
+                <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
+              </span>
+              <p class="font-mono text-[10px] uppercase tracking-wider text-slate-500">02 · Geç fark edilen talep</p>
+            </div>
+            <h3 class="mt-5 text-lg font-medium text-white">Talep Yükseldiğinde Bunu Geç Görmek Pahalıya Patlıyor</h3>
+            <p class="mt-3 text-sm leading-relaxed text-slate-400">
+              Bir ürünün çevresinde hareket artıyorsa orada bir ilgi oluşuyor demektir. Bunu ancak satıştan
+              sonra fark etmek, fırsatı kaçırmak anlamına gelir.
+            </p>
+            <ul class="mt-5 space-y-2 text-sm text-slate-400">
+              <li class="flex items-start gap-2"><span class="mt-1.5 h-1 w-1 rounded-full bg-rose-500"></span>Talep Artışı Erken Aşamada Görülmüyor</li>
+              <li class="flex items-start gap-2"><span class="mt-1.5 h-1 w-1 rounded-full bg-rose-500"></span>Stok Kararları Hâlâ Yavaş Döngüde Alınıyor</li>
+              <li class="flex items-start gap-2"><span class="mt-1.5 h-1 w-1 rounded-full bg-rose-500"></span>"Bakan Var Ama Alan Yok" Durumu Açıklanamıyor</li>
+            </ul>
+          </article>
+
+          <article class="reveal group relative overflow-hidden rounded-2xl border border-white/5 bg-ink-850/60 p-7 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)] transition hover:border-white/10 hover:bg-ink-850" style="animation-delay:160ms">
+            <div class="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/16 to-transparent"></div>
+            <div class="flex items-center gap-3">
+              <span class="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.03] text-amber-400">
+                <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+              </span>
+              <p class="font-mono text-[10px] uppercase tracking-wider text-slate-500">03 · Statik yerleşim</p>
+            </div>
+            <h3 class="mt-5 text-lg font-medium text-white">Yerleşim Sabit, Müşteri Akışı Sürekli Değişiyor</h3>
+            <p class="mt-3 text-sm leading-relaxed text-slate-400">
+              Gün içinde bazı koridorlar tıkanır, bazı alanlar boşalır, bazı noktalar beklenmedik şekilde
+              yoğunlaşır. Sabit saha planı bu değişimi tek başına yakalayamaz.
+            </p>
+            <ul class="mt-5 space-y-2 text-sm text-slate-400">
+              <li class="flex items-start gap-2"><span class="mt-1.5 h-1 w-1 rounded-full bg-amber-400"></span>Kasa Önündeki Yığılma Geç Fark Ediliyor</li>
+              <li class="flex items-start gap-2"><span class="mt-1.5 h-1 w-1 rounded-full bg-amber-400"></span>Akışı Bozan Koridorlar Net Görünmüyor</li>
+              <li class="flex items-start gap-2"><span class="mt-1.5 h-1 w-1 rounded-full bg-amber-400"></span>Vardiya Planı Gün İçi Yoğunluğa Uyum Sağlamıyor</li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- SSS alanı -->
+    <section id="sss" class="relative py-28">
+      <div class="mx-auto grid max-w-7xl gap-12 rounded-[32px] border border-white/6 bg-white/[0.025] px-6 py-12 lg:grid-cols-3">
+        <div>
+          <p class="font-mono text-[11px] uppercase tracking-[0.18em] text-atlas-400">SSS</p>
+          <h2 class="mt-3 text-balance text-3xl font-semibold tracking-tight text-white">
+            Hâlâ sorunuz mu var?
+          </h2>
+          <p class="mt-4 text-sm leading-relaxed text-slate-400">
+            En çok merak edilen iki konu. Gerisini canlı demoda gösteriyoruz.
+          </p>
+        </div>
+        <div class="space-y-3 lg:col-span-2">
+          <details class="group relative overflow-hidden rounded-xl border border-white/5 bg-ink-850/60 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)] transition open:border-white/10 open:bg-ink-850">
+            <div class="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-white/14 to-transparent"></div>
+            <summary class="flex cursor-pointer items-center justify-between text-sm font-medium text-white">
+              Yüz tanıma yapıyor musunuz? KVKK uyumu nasıl?
+              <span class="grid h-6 w-6 place-items-center rounded-full border border-white/10 text-slate-400 transition group-open:rotate-45">
+                <svg viewBox="0 0 24 24" class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              </span>
+            </summary>
+            <p class="mt-3 text-sm leading-relaxed text-slate-400">
+              Hayır. InsightMap yalnızca anonim insan tespiti yapar — yüz tanımıyor, kimlik üretmiyor. Görüntü
+              edge cihazından dışarı çıkmaz; merkeze yalnızca silüet sayısı ve konum verisi akar. Süreç
+              tamamen KVKK uyumludur.
+            </p>
+          </details>
+          <details class="group relative overflow-hidden rounded-xl border border-white/5 bg-ink-850/60 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.025)] transition open:border-white/10 open:bg-ink-850">
+            <div class="pointer-events-none absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-white/14 to-transparent"></div>
+            <summary class="flex cursor-pointer items-center justify-between text-sm font-medium text-white">
+              Yeni kamera kurmamız gerekiyor mu?
+              <span class="grid h-6 w-6 place-items-center rounded-full border border-white/10 text-slate-400 transition group-open:rotate-45">
+                <svg viewBox="0 0 24 24" class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              </span>
+            </summary>
+            <p class="mt-3 text-sm leading-relaxed text-slate-400">
+              Hayır. Sahanızdaki RTSP / ONVIF uyumlu mevcut IP kameralarını kullanırız. Tek eklenen, edge
+              tespiti yapan küçük bir cihazdır.
+            </p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- Son çağrı alanı -->
+    <section id="demo" class="relative bg-white/[0.02] py-24">
+      <div class="mx-auto max-w-7xl px-6">
+        <div class="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-ink-850 to-ink-900 p-10 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] sm:p-16">
+          <div class="dot-grid absolute inset-0 opacity-50 [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_75%)]"></div>
+          <div class="absolute -bottom-20 -right-20 h-80 w-80 rounded-full bg-rose-500/20 blur-3xl"></div>
+          <div class="absolute -top-20 -left-20 h-80 w-80 rounded-full bg-atlas-500/20 blur-3xl"></div>
+          <div class="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent"></div>
+
+          <div class="relative mx-auto max-w-3xl text-center">
+            <h2 class="text-balance text-3xl font-semibold tracking-tight text-white sm:text-4xl lg:text-5xl">
+              Operasyonunuz Veri Üretiyor.
+              <span class="text-slate-400">Siz Okumaya Hazır Mısınız?</span>
+            </h2>
+            <p class="mx-auto mt-5 max-w-xl text-pretty leading-relaxed text-slate-400">
+              InsightMap'i gerçek saha akışı üzerinde gösteriyoruz. Isı haritalarını, yoğunlaşan
+              alanları ve saha hareketinin gün içindeki dağılımını tek ekranda izleyin.
+            </p>
+            <div class="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <a href="#" class="group inline-flex w-full items-center justify-center gap-2 rounded-xl bg-ink-900 px-5 py-3 text-sm font-medium text-white shadow-glow transition hover:bg-ink-800 sm:w-auto">
+                Demoyu başlat
+                <svg class="h-4 w-4 transition group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+              </a>
+              <a href="/login.html" class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-5 py-3 text-sm text-slate-200 transition hover:border-white/20 hover:bg-white/[0.08] sm:w-auto">
+                Giriş yap
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Alt bilgi alanı -->
+    <footer class="border-t-2 border-white/10">
+      <div class="mx-auto grid max-w-7xl gap-10 px-6 py-14 md:grid-cols-4">
+        <div class="md:col-span-2">
+          <div class="flex items-center">
+            <span class="flex h-12 items-center rounded-2xl border border-white/10 bg-gradient-to-r from-white via-[#f8fcff] to-[#fff7f4] px-3 shadow-[0_12px_28px_-24px_rgba(15,23,42,0.42)]">
+              <img src="/logo.png" alt="InsightMap" class="h-7 w-auto" />
+            </span>
+          </div>
+          <p class="mt-4 max-w-sm text-sm leading-relaxed text-slate-500">Saha hareketini daha okunur hale getiren bir ısı haritası arayüzü.</p>
+        </div>
+        <div>
+          <p class="font-mono text-[10px] uppercase tracking-wider text-slate-500">Hızlı erişim</p>
+          <ul class="mt-4 space-y-2 text-sm text-slate-400">
+            <li><a href="#problem" class="transition hover:text-white">Problem</a></li>
+            <li><a href="#sss" class="transition hover:text-white">SSS</a></li>
+            <li><a href="/login.html" class="transition hover:text-white">Giriş yap</a></li>
+            <li><a href="/register.html" class="transition hover:text-white">Kayıt ol</a></li>
+          </ul>
+        </div>
+        <div>
+          <p class="font-mono text-[10px] uppercase tracking-wider text-slate-500">Hackathon</p>
+          <ul class="mt-4 space-y-2 text-sm text-slate-400">
+            <li class="text-slate-400">BASE41 · 2026</li>
+            <li class="text-slate-400">Kategori: Endüstri 4.0</li>
+            <li class="text-slate-400">Mevcut kamera altyapısı ile çalışır</li>
+          </ul>
+        </div>
+      </div>
+      <div class="border-t-2 border-white/10 px-6 py-5">
+        <div class="mx-auto flex max-w-7xl flex-col items-center justify-between gap-2 text-xs text-slate-500 sm:flex-row">
+          <p>© 2026 InsightMap — Tüm Hakları Saklıdır.</p>
+          
+        </div>
+      </div>
+    </footer>
+
+    <script src="/script.js"></script>
+  </body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+

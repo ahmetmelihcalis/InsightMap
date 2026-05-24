@@ -1,0 +1,16 @@
+{
+  "name": "insightmap",
+  "version": "1.0.0",
+  "description": "InsightMap — perakende ısı haritası zekası",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "type": "commonjs",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.7.7",
+    "dotenv": "^16.4.5",
+    "mongodb": "^6.10.0"
+  }
+}
